@@ -1,0 +1,69 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Initialize git submodules
+      run: |
+        git -c submodule.libs.update=none submodule update --init --recursive
+        git submodule update --init --recursive
+    
+    - name: Setup Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.8.0'
+        host: 'windows'
+        target: 'desktop'
+        arch: 'win64_msvc2022_64'
+        modules: 'qtmultimedia qtquickcontrols2 qtsvg'
+        cache: true
+    
+    - name: Setup Visual Studio environment
+      uses: microsoft/setup-msbuild@v2
+    
+    - name: Install 7-Zip
+      run: choco install 7zip
+    
+    - name: Add Qt to PATH
+      run: echo "$env:Qt6_DIR\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    
+    - name: Build Moonlight
+      run: |
+        scripts\build-arch.bat Release
+      shell: cmd
+    
+    - name: List build outputs
+      run: |
+        echo "Listing build directory:"
+        if (Test-Path "build") { Get-ChildItem -Recurse build | Where-Object { $_.Name -like "*.exe" -or $_.Name -like "*.zip" } }
+        echo "Listing deploy directory:"
+        if (Test-Path "build\deploy-x64-Release") { Get-ChildItem "build\deploy-x64-Release" }
+    
+    - name: Upload Moonlight executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: Moonlight-exe
+        path: |
+          build/build-x64-Release/app/Release/Moonlight.exe
+          build/deploy-x64-Release/Moonlight.exe
+        if-no-files-found: warn
+    
+    - name: Upload portable package
+      uses: actions/upload-artifact@v4
+      with:
+        name: MoonlightPortable-x64
+        path: build/installer-x64-Release/MoonlightPortable-x64-*.zip
+        if-no-files-found: warn

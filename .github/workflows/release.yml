@@ -1,0 +1,80 @@
+name: Release Build
+
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a new release'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    
+    strategy:
+      matrix:
+        arch: [x64]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Initialize git submodules
+      run: |
+        git -c submodule.libs.update=none submodule update --init --recursive
+        git submodule update --init --recursive
+    
+    - name: Setup Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.8.0'
+        host: 'windows'
+        target: 'desktop'
+        arch: 'win64_msvc2022_64'
+        modules: 'qtmultimedia qtquickcontrols2 qtsvg'
+        cache: true
+    
+    - name: Setup Visual Studio environment
+      uses: microsoft/setup-msbuild@v2
+    
+    - name: Install 7-Zip
+      run: choco install 7zip
+    
+    - name: Get version
+      id: version
+      run: |
+        $VERSION = Get-Content app\version.txt -Raw
+        $VERSION = $VERSION.Trim()
+        echo "VERSION=$VERSION" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        echo "version=$VERSION" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+    
+    - name: Add Qt to PATH
+      run: echo "$env:Qt6_DIR\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    
+    - name: Build Moonlight Release
+      run: |
+        scripts\build-arch.bat Release
+      shell: cmd
+    
+    - name: Upload to Release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          build/installer-${{ matrix.arch }}-Release/MoonlightPortable-${{ matrix.arch }}-${{ env.VERSION }}.zip
+          build/symbols-${{ matrix.arch }}-Release/MoonlightDebuggingSymbols-${{ matrix.arch }}-${{ env.VERSION }}.zip
+    
+    - name: Upload artifacts for manual release
+      if: github.event.inputs.create_release == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: MoonlightRelease-${{ matrix.arch }}
+        path: |
+          build/installer-${{ matrix.arch }}-Release/MoonlightPortable-${{ matrix.arch }}-${{ env.VERSION }}.zip
+          build/symbols-${{ matrix.arch }}-Release/MoonlightDebuggingSymbols-${{ matrix.arch }}-${{ env.VERSION }}.zip

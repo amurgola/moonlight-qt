@@ -1,0 +1,83 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [ published ]
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    
+    strategy:
+      matrix:
+        arch: [x64]
+        config: [Release]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Initialize submodules
+      run: |
+        git -c submodule.libs.update=none submodule update --init --recursive
+        git submodule update --init --recursive
+    
+    - name: Setup Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.8.0'
+        host: 'windows'
+        target: 'desktop'
+        arch: 'win64_msvc2022_64'
+        modules: 'qtmultimedia qtquickcontrols2 qtsvg'
+        cache: true
+    
+    - name: Setup Visual Studio Environment
+      uses: microsoft/setup-msbuild@v2
+      with:
+        vs-version: '17.0'
+    
+    - name: Install 7-Zip
+      run: |
+        choco install 7zip
+        echo "C:\Program Files\7-Zip" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    
+    - name: Setup Build Environment
+      run: |
+        $VERSION = Get-Content app\version.txt -Raw
+        $VERSION = $VERSION.Trim()
+        echo "VERSION=$VERSION" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        echo "QTDIR=$env:Qt6_DIR" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+    
+    - name: Build Moonlight
+      run: |
+        $env:PATH = "$env:PATH;$env:QTDIR\msvc2022_64\bin"
+        scripts\build-arch.bat ${{ matrix.config }}
+      shell: cmd
+    
+    - name: Upload Portable Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: MoonlightPortable-${{ matrix.arch }}-${{ matrix.config }}
+        path: build/installer-${{ matrix.arch }}-${{ matrix.config }}/MoonlightPortable-${{ matrix.arch }}-${{ env.VERSION }}.zip
+        if-no-files-found: error
+    
+    - name: Upload Debug Symbols
+      uses: actions/upload-artifact@v4
+      with:
+        name: MoonlightDebuggingSymbols-${{ matrix.arch }}-${{ matrix.config }}
+        path: build/symbols-${{ matrix.arch }}-${{ matrix.config }}/MoonlightDebuggingSymbols-${{ matrix.arch }}-${{ env.VERSION }}.zip
+        if-no-files-found: warn
+    
+    - name: Upload to Release (if release)
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          build/installer-${{ matrix.arch }}-${{ matrix.config }}/MoonlightPortable-${{ matrix.arch }}-${{ env.VERSION }}.zip
