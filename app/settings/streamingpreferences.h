@@ -144,7 +144,8 @@ public:
     Q_PROPERTY(bool swapFaceButtons MEMBER swapFaceButtons NOTIFY swapFaceButtonsChanged)
     Q_PROPERTY(bool keepAwake MEMBER keepAwake NOTIFY keepAwakeChanged)
     Q_PROPERTY(CaptureSysKeysMode captureSysKeysMode MEMBER captureSysKeysMode NOTIFY captureSysKeysModeChanged)
-    Q_PROPERTY(Language language MEMBER language NOTIFY languageChanged);
+    Q_PROPERTY(Language language MEMBER language NOTIFY languageChanged)
+    Q_PROPERTY(bool clipboardSync MEMBER clipboardSync NOTIFY clipboardSyncChanged)
 
     Q_INVOKABLE bool retranslate();
 
@@ -177,6 +178,7 @@ public:
     bool swapFaceButtons;
     bool keepAwake;
     int packetSize;
+    bool clipboardSync;
     AudioConfig audioConfig;
     VideoCodecConfig videoCodecConfig;
     bool enableHdr;
@@ -224,6 +226,7 @@ signals:
     void captureSysKeysModeChanged();
     void keepAwakeChanged();
     void languageChanged();
+    void clipboardSyncChanged();
 
 private:
     explicit StreamingPreferences(QQmlEngine *qmlEngine);

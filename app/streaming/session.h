@@ -2,6 +2,7 @@
 
 #include <QSemaphore>
 #include <QWindow>
+#include <QString>
 
 #include <Limelight.h>
 #include <opus_multistream.h>
@@ -174,6 +175,8 @@ private:
 
     void updateOptimalWindowDisplayMode();
 
+    void checkAndSyncClipboard();
+
     enum class DecoderAvailability {
         None,
         Software,
@@ -284,6 +287,10 @@ private:
     Uint32 m_DropAudioEndTime;
 
     Overlay::OverlayManager m_OverlayManager;
+
+    // Clipboard sync variables
+    QString m_LastClipboardText;
+    Uint32 m_LastClipboardCheckTime;
 
     static CONNECTION_LISTENER_CALLBACKS k_ConnCallbacks;
     static Session* s_ActiveSession;
