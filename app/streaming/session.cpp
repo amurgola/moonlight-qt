@@ -583,7 +583,8 @@ Session::Session(NvComputer* computer, NvApp& app, StreamingPreferences *prefere
       m_OpusDecoder(nullptr),
       m_AudioRenderer(nullptr),
       m_AudioSampleCount(0),
-      m_DropAudioEndTime(0)
+      m_DropAudioEndTime(0),
+      m_LastClipboardCheckTime(0)
 {
 }
 
@@ -2025,6 +2026,7 @@ void Session::execInternal()
         // and other problems.
         if (!SDL_WaitEventTimeout(&event, 1000)) {
             presence.runCallbacks();
+            checkAndSyncClipboard();
             continue;
         }
 #else
@@ -2041,6 +2043,7 @@ void Session::execInternal()
             SDL_Delay(10);
 #endif
             presence.runCallbacks();
+            checkAndSyncClipboard();
             continue;
         }
 #endif
@@ -2414,5 +2417,50 @@ DispatchDeferredCleanup:
     // When it is complete, it will release our s_ActiveSessionSemaphore
     // reference.
     QThreadPool::globalInstance()->start(new DeferredSessionCleanupTask(this));
+}
+
+void Session::checkAndSyncClipboard()
+{
+    // Only sync if the preference is enabled
+    if (!m_Preferences->clipboardSync) {
+        return;
+    }
+    
+    // Check clipboard at most every 500ms to avoid performance issues
+    Uint32 currentTime = SDL_GetTicks();
+    if (currentTime - m_LastClipboardCheckTime < 500) {
+        return;
+    }
+    m_LastClipboardCheckTime = currentTime;
+    
+    // Check if clipboard has text content
+    if (!SDL_HasClipboardText()) {
+        return;
+    }
+    
+    // Get current clipboard text
+    char* clipboardText = SDL_GetClipboardText();
+    if (clipboardText == nullptr) {
+        return;
+    }
+    
+    QString currentClipboard = QString::fromUtf8(clipboardText);
+    
+    // Check if clipboard content has changed
+    if (currentClipboard != m_LastClipboardText && !currentClipboard.isEmpty()) {
+        m_LastClipboardText = currentClipboard;
+        
+        // Convert back to UTF-8 for sending
+        QByteArray utf8Text = currentClipboard.toUtf8();
+        
+        // Send clipboard content to host PC
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, 
+                   "Syncing clipboard content to host PC (%d characters)", 
+                   utf8Text.length());
+                   
+        LiSendUtf8TextEvent(utf8Text.constData(), (unsigned int)utf8Text.length());
+    }
+    
+    SDL_free(clipboardText);
 }
 
